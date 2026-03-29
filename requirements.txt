@@ -1,0 +1,6 @@
+python-telegram-bot==21.6
+APScheduler==3.11.0
+python-dotenv==1.0.1
+python-dateutil==2.9.0
+fastapi==0.115.12
+redis==5.2.1
