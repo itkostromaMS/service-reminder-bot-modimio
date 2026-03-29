@@ -13,6 +13,8 @@ MAIN_MENU_TEXT = (
     "Управление через кнопки — никаких команд запоминать не нужно."
 )
 
+SELECTION_PAGE_SIZE = 10
+
 HELP_TEXT = (
     "🤖 Service Reminder Bot\n\n"
     "Управление полностью через кнопки — никаких команд запоминать не нужно.\n\n"
@@ -20,7 +22,7 @@ HELP_TEXT = (
     "1. Нажмите ➕ Добавить услугу\n"
     "2. Введите название и дату окончания\n"
     "3. Бот сам напомнит за 7, 3 и 1 день\n"
-    "4. Продлите услугу одной кнопкой 🔄\n\n"
+    "4. Выберите продление через меню 🔄\n\n"
     "🔔 Уведомления: за 7, 3 и 1 день до окончания\n"
     "📅 Формат даты: YYYY-MM-DD"
 )
@@ -38,10 +40,10 @@ def main_menu_markup() -> InlineKeyboardMarkup:
 def services_markup(services: list[dict]) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
 
-    for service in services:
+    if services:
         rows.append([
-            InlineKeyboardButton("🔄 Продлить", callback_data=f"act:renew:{service['id']}"),
-            InlineKeyboardButton("🗑 Удалить", callback_data=f"act:del:{service['id']}"),
+            InlineKeyboardButton("🔄 Продлить услугу", callback_data="act:renew_menu:0"),
+            InlineKeyboardButton("🗑 Удалить услугу", callback_data="act:del_menu:0"),
         ])
 
     footer = [InlineKeyboardButton("➕ Добавить услугу", callback_data="act:add")]
@@ -102,14 +104,62 @@ def build_services_text(services: list[dict]) -> str:
 
     lines = ["📋 Ваши услуги:", ""]
 
-    for service in services:
+    for index, service in enumerate(services, start=1):
         lines.append("━━━━━━━━━━━━━━━━━━")
         lines.append("")
-        lines.append(f"{service_status_icon(service)} {service['name']}")
+        lines.append(f"№{index} {service_status_icon(service)} {service['name']}")
         lines.append(f"   📅 {service['end_date']} ({format_days_left(service['end_date'])})")
         lines.append("")
 
     return "\n".join(lines).rstrip()
+
+
+def build_selection_text(services: list[dict], page: int, title: str) -> str:
+    if not services:
+        return "📭 У вас нет отслеживаемых услуг."
+
+    total_pages = (len(services) - 1) // SELECTION_PAGE_SIZE + 1
+    safe_page = max(0, min(page, total_pages - 1))
+    start = safe_page * SELECTION_PAGE_SIZE
+    end = min(start + SELECTION_PAGE_SIZE, len(services))
+
+    lines = [f"{title}", f"Страница {safe_page + 1}/{total_pages}", ""]
+    for number, service in enumerate(services[start:end], start=start + 1):
+        lines.append(f"{number}. {service_status_icon(service)} {service['name']} — {service['end_date']}")
+
+    lines.append("")
+    lines.append("Выберите услугу кнопкой ниже:")
+    return "\n".join(lines)
+
+
+def selection_markup(services: list[dict], page: int, mode: str) -> InlineKeyboardMarkup:
+    if not services:
+        return add_button_markup()
+
+    total_pages = (len(services) - 1) // SELECTION_PAGE_SIZE + 1
+    safe_page = max(0, min(page, total_pages - 1))
+    start = safe_page * SELECTION_PAGE_SIZE
+    end = min(start + SELECTION_PAGE_SIZE, len(services))
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for number, service in enumerate(services[start:end], start=start + 1):
+        rows.append([
+            InlineKeyboardButton(
+                f"№{number} {service['name']}",
+                callback_data=f"act:{mode}_pick:{service['id']}:{safe_page}",
+            )
+        ])
+
+    nav: list[InlineKeyboardButton] = []
+    if safe_page > 0:
+        nav.append(InlineKeyboardButton("◀️ Назад", callback_data=f"act:{mode}_menu:{safe_page - 1}"))
+    if safe_page < total_pages - 1:
+        nav.append(InlineKeyboardButton("▶️ Далее", callback_data=f"act:{mode}_menu:{safe_page + 1}"))
+    if nav:
+        rows.append(nav)
+
+    rows.append([InlineKeyboardButton("↩️ К списку", callback_data="act:list")])
+    return InlineKeyboardMarkup(rows)
 
 
 def build_add_date_prompt(name: str) -> str:
@@ -287,6 +337,26 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.edit_message_text(build_services_text(services), reply_markup=services_markup(services))
         return
 
+    if action == "renew_menu" and len(parts) == 3:
+        await storage.clear_user_state(user_id)
+        page = int(parts[2])
+        services = await storage.get_services(user_id)
+        await query.edit_message_text(
+            build_selection_text(services, page, "🔄 Выберите услугу для продления"),
+            reply_markup=selection_markup(services, page, "renew"),
+        )
+        return
+
+    if action == "del_menu" and len(parts) == 3:
+        await storage.clear_user_state(user_id)
+        page = int(parts[2])
+        services = await storage.get_services(user_id)
+        await query.edit_message_text(
+            build_selection_text(services, page, "🗑 Выберите услугу для удаления"),
+            reply_markup=selection_markup(services, page, "del"),
+        )
+        return
+
     if data == "act:clear":
         await storage.clear_user_state(user_id)
         services = await storage.get_services(user_id)
@@ -312,7 +382,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.edit_message_text(build_services_text(services), reply_markup=services_markup(services))
         return
 
-    if action == "renew" and len(parts) == 3:
+    if action in {"renew", "renew_pick"} and len(parts) in {3, 4}:
         await storage.clear_user_state(user_id)
         service = await storage.get_service(user_id, int(parts[2]))
         if not service:
@@ -356,7 +426,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.edit_message_text(build_services_text(services), reply_markup=services_markup(services))
         return
 
-    if action == "del" and len(parts) == 3:
+    if action in {"del", "del_pick"} and len(parts) in {3, 4}:
         await storage.clear_user_state(user_id)
         service = await storage.get_service(user_id, int(parts[2]))
         if not service:
