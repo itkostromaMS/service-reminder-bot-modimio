@@ -8,11 +8,12 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-TZ = os.getenv("TZ", "UTC").strip() or "UTC"
+# Vercel can reject some common variable names during env import.
+TZ = os.getenv("APP_TZ", os.getenv("TZ", "UTC")).strip() or "UTC"
 CHECK_TIME = os.getenv("CHECK_TIME", "09:00").strip() or "09:00"
 DATA_FILE = BASE_DIR / os.getenv("DATA_FILE", "data.json")
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "file").strip().lower() or "file"
-REDIS_URL = os.getenv("REDIS_URL", "").strip()
+REDIS_URL = os.getenv("REDIS_URL", os.getenv("REDIS_CONNECTION_URL", "")).strip()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
 CRON_SECRET = os.getenv("CRON_SECRET", "").strip()
 

@@ -37,7 +37,7 @@ service-reminder-bot-modimio/
 
 ```env
 BOT_TOKEN=<telegram bot token>
-TZ=Europe/Moscow
+APP_TZ=Europe/Moscow
 CHECK_TIME=09:00
 STORAGE_BACKEND=file
 ```
@@ -129,7 +129,7 @@ REDIS_URL=<your redis url>
 
 ```env
 BOT_TOKEN=<telegram token>
-TZ=Europe/Moscow
+APP_TZ=Europe/Moscow
 CHECK_TIME=09:00
 STORAGE_BACKEND=redis
 REDIS_URL=<redis connection url>
@@ -183,10 +183,10 @@ https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo
 Это сделано специально:
 
 - Vercel Cron работает только в UTC
-- у пользователя может быть любой `TZ`
-- бот сам проверяет локальное время из `TZ` и запускает отправку только в окно вокруг `CHECK_TIME`
+- у пользователя может быть любой `APP_TZ`
+- бот сам проверяет локальное время из `APP_TZ` и запускает отправку только в окно вокруг `CHECK_TIME`
 
-Итог: можно оставить, например, `TZ=Europe/Moscow` и `CHECK_TIME=09:00`, а cron будет вызываться каждые 5 минут и выполнит рассылку ровно один раз в нужный локальный день и час.
+Итог: можно оставить, например, `APP_TZ=Europe/Moscow` и `CHECK_TIME=09:00`, а cron будет вызываться каждые 5 минут и выполнит рассылку ровно один раз в нужный локальный день и час.
 
 ### 8. Ручной запуск cron для проверки
 
